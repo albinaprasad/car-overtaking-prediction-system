@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "918477290485",
+    "project_id": "overtaking-assistant-5e22f",
+    "storage_bucket": "overtaking-assistant-5e22f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:918477290485:android:d653c652dc148243237ebc",
+        "android_client_info": {
+          "package_name": "com.example.overtaking_assistant"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXReA6p95bY03ihxR-Nbd6figsZfvFlUg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

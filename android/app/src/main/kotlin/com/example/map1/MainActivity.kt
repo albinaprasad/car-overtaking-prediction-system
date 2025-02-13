@@ -1,4 +1,4 @@
-package com.example.map1
+package com.example.overtaking_assistant
 
 import io.flutter.embedding.android.FlutterActivity
 

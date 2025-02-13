@@ -30,15 +30,8 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
   String? _errorMessage;
   bool _overtakingUnsafe = false;
 
-  // For release version, test mode is off.
+  // For release version, test mode is off. Set to true to simulate test data.
   final bool _testMode = false;
-
-  // User-configurable thresholds (defaults)
-  double _speedDiffThreshold = 10.0; // km/h difference required
-  double _distanceThreshold = 50.0; // in meters
-  double _angleThreshold = 30.0; // in degrees
-  double _minimumSpeedForCheck =
-      5.0; // km/h, below which overtaking logic is skipped
 
   StreamSubscription<DatabaseEvent>? _firebaseSub;
   StreamSubscription<Position>? _locationSubscription;
@@ -152,8 +145,7 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
 
   void _startFirebaseUpdateTimer() {
     _firebaseUpdateTimer?.cancel();
-    _firebaseUpdateTimer = Timer.periodic(const Duration(seconds: 8), (timer) {
-      //TIMER
+    _firebaseUpdateTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       print("Debug: Timer tick - updating Firebase.");
       _updateVehicleData();
     });
@@ -225,22 +217,13 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
   }
 
   /// Overtaking Safety Logic:
-  /// For each vehicle (other than your own), check if:
-  /// 1. The vehicle is roughly ahead (within [_angleThreshold] of your current heading),
-  /// 2. The distance is less than [_distanceThreshold] meters, and
-  /// 3. Your speed is at least [_speedDiffThreshold] km/h higher than that vehicle's speed.
+  /// For each vehicle (other than your own), checks if:
+  ///   1. The vehicle is roughly ahead (within 30° of your current heading),
+  ///   2. The distance is less than 50 meters, and
+  ///   3. Your speed is at least 10 km/h higher than that vehicle's speed.
   void _checkOvertakingSafety() {
     bool unsafe = false;
     final distanceCalculator = Distance();
-
-    // If your speed is below minimum, skip overtaking check.
-    if (_currentSpeed < _minimumSpeedForCheck) {
-      print(
-          "Debug: Current speed ($_currentSpeed km/h) is below the minimum threshold ($_minimumSpeedForCheck km/h) for overtaking check.");
-      if (mounted) setState(() => _overtakingUnsafe = false);
-      return;
-    }
-
     _allVehicles.forEach((vehicleId, vehicleData) {
       if (vehicleId == widget.vehicleId) return; // Skip your own vehicle
 
@@ -249,6 +232,8 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
         _currentPosition,
         vehicleData.position,
       );
+      const double speedDiffThreshold = 10.0;
+      const double distanceThreshold = 50.0;
       double bearingToOther =
           distanceCalculator.bearing(_currentPosition, vehicleData.position);
       double angleDifference = (_currentHeading - bearingToOther).abs();
@@ -256,14 +241,15 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
         angleDifference = 360 - angleDifference;
       }
       print(
-          "Debug: Vehicle $vehicleId => Distance: ${distance.toStringAsFixed(2)} m, Bearing: ${bearingToOther.toStringAsFixed(2)}°, My Heading: ${_currentHeading.toStringAsFixed(2)}°, Angle Difference: ${angleDifference.toStringAsFixed(2)}°");
-      if (angleDifference > _angleThreshold) {
+          "Debug: Vehicle $vehicleId => Distance: ${distance.toStringAsFixed(2)} m, Bearing: ${bearingToOther.toStringAsFixed(2)}°, "
+          "My Heading: ${_currentHeading.toStringAsFixed(2)}°, Angle Difference: ${angleDifference.toStringAsFixed(2)}°");
+      if (angleDifference > 30) {
         print(
-            "Debug: Vehicle $vehicleId is not in front (angle difference > $_angleThreshold°).");
+            "Debug: Vehicle $vehicleId is not in front (angle difference > 30°).");
         return;
       }
-      if (_currentSpeed > (vehicleData.speed + _speedDiffThreshold) &&
-          distance < _distanceThreshold) {
+      if (_currentSpeed > (vehicleData.speed + speedDiffThreshold) &&
+          distance < distanceThreshold) {
         unsafe = true;
         print(
             "Debug: Overtaking condition met for vehicle $vehicleId. My Speed: $_currentSpeed km/h, Other Speed: ${vehicleData.speed} km/h, Distance: ${distance.toStringAsFixed(2)} m");
@@ -272,7 +258,6 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
             "Debug: Overtaking condition NOT met for vehicle $vehicleId. My Speed: $_currentSpeed km/h, Other Speed: ${vehicleData.speed} km/h, Distance: ${distance.toStringAsFixed(2)} m");
       }
     });
-
     if (mounted) {
       setState(() {
         _overtakingUnsafe = unsafe;
@@ -292,95 +277,6 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
         ),
       );
     }
-  }
-
-  // ----------------------
-  // Settings Dialog to adjust thresholds
-  // ----------------------
-  Future<void> _showSettingsDialog() async {
-    // Temporary controllers initialized with current threshold values.
-    final TextEditingController speedDiffController =
-        TextEditingController(text: _speedDiffThreshold.toString());
-    final TextEditingController distanceController =
-        TextEditingController(text: _distanceThreshold.toString());
-    final TextEditingController angleController =
-        TextEditingController(text: _angleThreshold.toString());
-    final TextEditingController minSpeedController =
-        TextEditingController(text: _minimumSpeedForCheck.toString());
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Overtaking Threshold Settings"),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(
-                  controller: speedDiffController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: "Speed Difference Threshold (km/h)",
-                  ),
-                ),
-                TextField(
-                  controller: distanceController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: "Distance Threshold (m)",
-                  ),
-                ),
-                TextField(
-                  controller: angleController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: "Angle Threshold (°)",
-                  ),
-                ),
-                TextField(
-                  controller: minSpeedController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: "Minimum Speed for Check (km/h)",
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // Cancel
-              },
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _speedDiffThreshold =
-                      double.tryParse(speedDiffController.text) ??
-                          _speedDiffThreshold;
-                  _distanceThreshold =
-                      double.tryParse(distanceController.text) ??
-                          _distanceThreshold;
-                  _angleThreshold =
-                      double.tryParse(angleController.text) ?? _angleThreshold;
-                  _minimumSpeedForCheck =
-                      double.tryParse(minSpeedController.text) ??
-                          _minimumSpeedForCheck;
-                });
-                print(
-                    "Debug: New settings => SpeedDiff: $_speedDiffThreshold km/h, Distance: $_distanceThreshold m, Angle: $_angleThreshold°, MinSpeed: $_minimumSpeedForCheck km/h");
-                Navigator.of(context).pop();
-                // Optionally, re-check overtaking logic after settings change.
-                _checkOvertakingSafety();
-              },
-              child: const Text("Save"),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   // ----------------------
@@ -431,71 +327,35 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Live Vehicle Tracking"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: _showSettingsDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              setState(() {
-                _allVehicles.clear();
-              });
-              _listenToAllVehicles();
-            },
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_errorMessage != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (_overtakingUnsafe)
-                  Container(
-                    width: double.infinity,
-                    color: Colors.redAccent,
-                    padding: const EdgeInsets.all(8.0),
-                    child: const Text(
-                      "Warning: Unsafe overtaking conditions detected!",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                Expanded(
-                  child: FlutterMap(
-                    options: MapOptions(
-                      initialCenter: _currentPosition,
-                      initialZoom: 15.0,
-                      interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                      ),
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                        subdomains: const ['a', 'b', 'c'],
-                        userAgentPackageName: 'com.example.vehicle_tracking',
-                      ),
-                      MarkerLayer(markers: _buildMarkers()),
-                    ],
-                  ),
+                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(_errorMessage!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _initializeTracking,
+                  child: const Text('Retry'),
                 ),
               ],
             ),
-    );
-  }
-
-  List<Marker> _buildMarkers() {
+          ),
+        ),
+      );
+    }
     final vehicleKeys = _allVehicles.keys.toList();
-    final markers = <Marker>[
+    final allMarkers = <Marker>[
       _buildVehicleMarker(
         widget.vehicleId,
         _currentPosition,
@@ -516,7 +376,59 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
         );
       }).toList(),
     ];
-    return markers;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Live Vehicle Tracking"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              setState(() {
+                _allVehicles.clear();
+              });
+              _listenToAllVehicles();
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_overtakingUnsafe)
+            Container(
+              width: double.infinity,
+              color: Colors.redAccent,
+              padding: const EdgeInsets.all(8.0),
+              child: const Text(
+                "Warning: Unsafe overtaking conditions detected!",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          Expanded(
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: _currentPosition,
+                initialZoom: 15.0,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                ),
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                  subdomains: const ['a', 'b', 'c'],
+                  userAgentPackageName: 'com.example.vehicle_tracking',
+                ),
+                MarkerLayer(markers: allMarkers),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Marker _buildVehicleMarker(

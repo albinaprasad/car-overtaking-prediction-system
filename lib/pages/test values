@@ -1,0 +1,59 @@
+Your Vehicle (e.g., vehicle3):
+
+Speed:
+Change _currentSpeed to simulate different speeds for your vehicle.
+Example: Set it to 95 km/h to simulate a high-speed scenario.
+Position:
+Adjust the latitude and longitude of _currentPosition to simulate your vehicle’s location.
+Heading:
+Change _currentHeading (in degrees) to simulate the direction your vehicle is facing.
+Example: A heading of 0° means facing North.
+Other Vehicles (e.g., vehicle4, vehicle2, etc.):
+
+Speed:
+Modify the speed value in the simulated data for each other vehicle.
+For triggering overtaking:
+Set an other vehicle’s speed low enough so that your vehicle’s speed is at least 10 km/h higher.
+Example: Other vehicle at 75 km/h when your vehicle is at 95 km/h.
+For a non-trigger scenario:
+Increase the other vehicle’s speed closer to yours.
+Position:
+Adjust the latitude and longitude so that the other vehicle is:
+Within 50 meters of your vehicle.
+Positioned such that the bearing from your vehicle to it is close to your heading (within 30°).
+Example: If your vehicle is at (9.6059295, 76.4819432), you might set the other vehicle directly ahead with a slight increase in latitude (e.g., 9.6059395) and the same longitude.
+Heading:
+Set the other vehicle's heading so that it aligns with your vehicle’s direction.
+Example: A heading of 0° if you are both facing North.
+Timestamp:
+Ensure that the timestamp for each vehicle is current (i.e., within the last 5 minutes) so that the data isn’t filtered out as stale.
+
+Example Adjustments for Triggering the Alert
+Your Vehicle (vehicle3):
+
+Position: (9.6059295, 76.4819432)
+Speed: 95 km/h
+Heading: 0° (North)
+Other Vehicle (vehicle4):
+
+Position: (9.6059395, 76.4819432)
+(This position should yield a bearing near 0° from your vehicle.)
+Speed: 75 km/h
+Heading: 0°
+With these settings, your vehicle’s speed is 95 km/h, which is 20 km/h higher than 75 km/h. Since 95 > 75 + 10 (i.e., 95 > 85), the overtaking condition should be met, provided the distance (calculated to be within 50 m) and bearing conditions (angle difference ≤ 30°) are also satisfied.
+
+Example Adjustments for a Non-Trigger Scenario
+Your Vehicle (vehicle3):
+Speed: 75 km/h
+Other Vehicle (vehicle4):
+Speed: 70 km/h
+(Now the condition becomes 75 > 70 + 10, or 75 > 80, which is false.)
+Or you could adjust the positions so that the distance is more than 50 meters or the bearing difference is over 30°.
+
+By modifying these values in the _simulateTestData() method, you can test various overtaking scenarios. Once you’re done testing, set _testMode to false so that the app uses live data instead of these hardcoded values.
+
+
+
+
+
+
