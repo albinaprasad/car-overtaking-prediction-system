@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+
+// Import overspeed_screen if you need references here
 import 'overspeed/overspeed_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -9,56 +11,83 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Extend the background behind the AppBar.
-      extendBodyBehindAppBar: true,
+      // We’ll add a Drawer to mimic the second screenshot (blue menu).
+      drawer: const _CustomDrawer(),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFE2725B), // Terracotta red
-        elevation: 0,
-        title: const Text(
-          "Safety App",
-          style: TextStyle(color: Colors.white),
+        title: const Text("--AEGIS--"),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Top header area: You can display an image or just hero text
+            _HeaderSection(),
+            // Grid of features (Overspeed, Overtaking, and now 3D Map)
+            _FeatureGrid(),
+            // “Popular Services” section
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Services",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            _PopularServicesList(),
+          ],
         ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFFE2725B), // Terracotta red
-              Color(0xFFF5F5DC), // Light beige
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+    );
+  }
+}
+
+/// A header with an optional image, title, and subtitle.
+class _HeaderSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      // Adjust height as needed
+      height: 200,
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        // Could be a gradient or an image
+        gradient: LinearGradient(
+          colors: [
+            Color.fromARGB(255, 14, 126, 231),
+            Color(0xFF2196F3),
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
         ),
-        child: Center(
-          // Animate opacity and slide effect on load.
-          child: TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 800),
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.translate(
-                  // Slide in effect: move 30px upward as it fades in.
-                  offset: Offset(0, (1 - value) * 30),
-                  child: child,
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Text(
+                "Navigate your journey with confidence",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
                 ),
-              );
-            },
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                AnimatedMenuButton(
-                  text: "Overspeed Detection",
-                  route: '/overspeed',
+              ),
+              SizedBox(height: 8),
+              Text(
+                "Your one-stop safety solution.",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
                 ),
-                SizedBox(height: 20),
-                AnimatedMenuButton(
-                  text: "Overtaking",
-                  route: '/overtaking',
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -66,86 +95,269 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class AnimatedMenuButton extends StatefulWidget {
-  final String text;
-  final String route;
-
-  const AnimatedMenuButton({
-    Key? key,
-    required this.text,
-    required this.route,
-  }) : super(key: key);
-
+/// A grid with feature cards for main functionalities.
+class _FeatureGrid extends StatelessWidget {
   @override
-  _AnimatedMenuButtonState createState() => _AnimatedMenuButtonState();
+  Widget build(BuildContext context) {
+    final features = [
+      _FeatureItem(
+        icon: Icons.speed,
+        label: "Overspeed Detection",
+        routeName: "/overspeed",
+      ),
+      _FeatureItem(
+        icon: Icons.drive_eta,
+        label: "Overtaking",
+        routeName: "/overtaking",
+      ),
+      _FeatureItem(
+        icon: Icons.threed_rotation, // Icon representing 3D functionality
+        label: "Map",
+        routeName: "/map3d",
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: GridView.builder(
+        // By default, GridView wants to take infinite height,
+        // so wrap it in a SizedBox or use shrinkWrap + physics.
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: features.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3, // Display 3 features per row
+          childAspectRatio: 0.8,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        itemBuilder: (context, index) {
+          final item = features[index];
+          return _FeatureCard(item: item);
+        },
+      ),
+    );
+  }
 }
 
-class _AnimatedMenuButtonState extends State<AnimatedMenuButton> {
-  double _scale = 1.0;
-  double _rotation = 0.0; // Rotation in turns (1 turn = 360°)
+/// Model for each feature
+class _FeatureItem {
+  final IconData icon;
+  final String label;
+  final String routeName;
 
-  void _onTapDown(TapDownDetails details) {
-    setState(() {
-      _scale = 0.95;
-      _rotation = -0.01; // Approximately -3.6° rotation.
-    });
-  }
+  _FeatureItem({
+    required this.icon,
+    required this.label,
+    required this.routeName,
+  });
+}
 
-  void _onTapUp(TapUpDetails details) {
-    setState(() {
-      _scale = 1.0;
-      _rotation = 0.0;
-    });
-    // Delay navigation to let the animation complete.
-    Future.delayed(const Duration(milliseconds: 150), () {
-      Navigator.pushNamed(context, widget.route);
-    });
-  }
-
-  void _onTapCancel() {
-    setState(() {
-      _scale = 1.0;
-      _rotation = 0.0;
-    });
-  }
+/// Card widget for a single feature in the grid.
+class _FeatureCard extends StatelessWidget {
+  final _FeatureItem item;
+  const _FeatureCard({Key? key, required this.item}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      child: AnimatedRotation(
-        turns: _rotation,
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
-        child: AnimatedScale(
-          scale: _scale,
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          child: Card(
-            color: const Color(0xFF5F9EA0), // Muted teal
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+    return InkWell(
+      onTap: () => Navigator.pushNamed(context, item.routeName),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Icon inside a circular container
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              shape: BoxShape.circle,
             ),
-            child: SizedBox(
-              width: 250,
-              height: 80,
-              child: Center(
-                child: Text(
-                  widget.text,
-                  style: const TextStyle(
+            child: Icon(
+              item.icon,
+              size: 30,
+              color: Theme.of(context).primaryColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A horizontal list of “Popular Services” cards at the bottom.
+class _PopularServicesList extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final services = [
+      "Service A",
+      "Service B",
+      "Service C",
+      "Service D",
+    ];
+
+    return SizedBox(
+      height: 100,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        scrollDirection: Axis.horizontal,
+        itemCount: services.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemBuilder: (context, index) {
+          final service = services[index];
+          return _ServiceCard(title: service);
+        },
+      ),
+    );
+  }
+}
+
+/// Card widget for each popular service.
+class _ServiceCard extends StatelessWidget {
+  final String title;
+  const _ServiceCard({Key? key, required this.title}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Colors.blue.shade50,
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: SizedBox(
+        width: 120,
+        child: Center(
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Custom Drawer to mimic the second screenshot (blue menu with icons).
+class _CustomDrawer extends StatelessWidget {
+  const _CustomDrawer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      child: Container(
+        color: const Color(0xFF0E74E7), // Blue background
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Drawer Header
+              Container(
+                height: 150,
+                width: double.infinity,
+                color: const Color(0xFF0E74E7),
+                padding: const EdgeInsets.all(16.0),
+                alignment: Alignment.centerLeft,
+                child: const Text(
+                  "Menu",
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-            ),
+              // Drawer Items
+              _DrawerItem(
+                icon: Icons.home,
+                label: "Home",
+                onTap: () {
+                  Navigator.pop(context); // Close drawer
+                  Navigator.pushNamed(context, '/');
+                },
+              ),
+              _DrawerItem(
+                icon: Icons.info,
+                label: "About",
+                onTap: () {
+                  // Implement About route or logic
+                },
+              ),
+              _DrawerItem(
+                icon: Icons.settings,
+                label: "Settings",
+                onTap: () {
+                  // Implement Settings route or logic
+                },
+              ),
+              _DrawerItem(
+                icon: Icons.monetization_on,
+                label: "Earnings",
+                onTap: () {
+                  // Implement Earnings route or logic
+                },
+              ),
+              _DrawerItem(
+                icon: Icons.account_circle,
+                label: "Profile",
+                onTap: () {
+                  // Implement Profile logic
+                },
+              ),
+              _DrawerItem(
+                icon: Icons.contact_mail,
+                label: "Contact",
+                onTap: () {
+                  // Implement Contact route or logic
+                },
+              ),
+              const Spacer(),
+              // Logout at the bottom
+              _DrawerItem(
+                icon: Icons.logout,
+                label: "Logout",
+                onTap: () {
+                  // Implement logout logic
+                },
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Single row in the Drawer.
+class _DrawerItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _DrawerItem({
+    Key? key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white),
+      title: Text(
+        label,
+        style: const TextStyle(color: Colors.white),
+      ),
+      onTap: onTap,
     );
   }
 }

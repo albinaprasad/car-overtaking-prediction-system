@@ -35,15 +35,18 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
 
   // User-configurable thresholds (defaults)
   double _speedDiffThreshold = 10.0; // km/h difference required
-  double _distanceThreshold = 50.0; // in meters
+  double _distanceThreshold = 50.0; // in meters, for slow-vehicle-ahead check
   double _angleThreshold = 30.0; // in degrees
   double _minimumSpeedForCheck =
       5.0; // km/h, below which overtaking logic is skipped
 
+  // Additional threshold for oncoming vehicles (you can adjust as needed)
+  double _distanceThresholdOncoming = 100.0; // in meters
+
   StreamSubscription<DatabaseEvent>? _firebaseSub;
   StreamSubscription<Position>? _locationSubscription;
   Timer? _staleDataTimer;
-  Timer? _firebaseUpdateTimer; // Timer for updating Firebase every 3 seconds
+  Timer? _firebaseUpdateTimer; // Timer for updating Firebase every few seconds
 
   static const int STALE_DATA_THRESHOLD = 300000; // 5 minutes
 
@@ -116,7 +119,7 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
     if (mounted) {
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
-        _currentSpeed = (position.speed ?? 0.0) * 3.6;
+        _currentSpeed = (position.speed ?? 0.0) * 3.6; // Convert m/s to km/h
         _currentHeading = position.heading;
         _isLoading = false;
       });
@@ -152,8 +155,8 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
 
   void _startFirebaseUpdateTimer() {
     _firebaseUpdateTimer?.cancel();
+    // Update Firebase every 8 seconds, for example
     _firebaseUpdateTimer = Timer.periodic(const Duration(seconds: 8), (timer) {
-      //TIMER
       print("Debug: Timer tick - updating Firebase.");
       _updateVehicleData();
     });
@@ -185,6 +188,7 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
           print("Debug: Raw Firebase data: $values");
           final Map<String, VehicleData> updatedVehicles = {};
           final now = DateTime.now().millisecondsSinceEpoch;
+
           values.forEach((key, value) {
             final vehicleKey = key.toString();
             try {
@@ -196,6 +200,7 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
                 final heading =
                     double.tryParse(value['heading']?.toString() ?? '0.0') ??
                         0.0;
+
                 updatedVehicles[vehicleKey] = VehicleData(
                   position: LatLng(lat, lng),
                   speed: speed,
@@ -207,6 +212,7 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
               print("Debug: Error parsing data for $vehicleKey: $e");
             }
           });
+
           if (mounted) {
             setState(() {
               _allVehicles = updatedVehicles;
@@ -224,19 +230,27 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
     );
   }
 
-  /// Overtaking Safety Logic:
-  /// For each vehicle (other than your own), check if:
-  /// 1. The vehicle is roughly ahead (within [_angleThreshold] of your current heading),
-  /// 2. The distance is less than [_distanceThreshold] meters, and
-  /// 3. Your speed is at least [_speedDiffThreshold] km/h higher than that vehicle's speed.
+  /// Extended Overtaking Safety Logic:
+  /// 1. Check for a slow vehicle directly ahead:
+  ///    - Angle difference < _angleThreshold
+  ///    - You are faster by at least _speedDiffThreshold
+  ///    - Within _distanceThreshold meters
+  ///
+  /// 2. Check for an oncoming vehicle:
+  ///    - The other vehicle's heading is roughly opposite yours (heading difference < _angleThreshold)
+  ///    - The distance is within _distanceThresholdOncoming
+  ///
+  /// If either condition is true, set _overtakingUnsafe = true.
   void _checkOvertakingSafety() {
-    bool unsafe = false;
+    bool overtakingCandidate = false; // slow vehicle ahead
+    bool oncomingDetected = false; // oncoming vehicle in opposite lane
+
     final distanceCalculator = Distance();
 
-    // If your speed is below minimum, skip overtaking check.
+    // If your speed is below minimum, skip overtaking check
     if (_currentSpeed < _minimumSpeedForCheck) {
       print(
-          "Debug: Current speed ($_currentSpeed km/h) is below the minimum threshold ($_minimumSpeedForCheck km/h) for overtaking check.");
+          "Debug: Current speed ($_currentSpeed km/h) is below minimum threshold ($_minimumSpeedForCheck km/h).");
       if (mounted) setState(() => _overtakingUnsafe = false);
       return;
     }
@@ -249,33 +263,54 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
         _currentPosition,
         vehicleData.position,
       );
-      double bearingToOther =
-          distanceCalculator.bearing(_currentPosition, vehicleData.position);
+
+      double bearingToOther = distanceCalculator.bearing(
+        _currentPosition,
+        vehicleData.position,
+      );
+
       double angleDifference = (_currentHeading - bearingToOther).abs();
       if (angleDifference > 180) {
         angleDifference = 360 - angleDifference;
       }
-      print(
-          "Debug: Vehicle $vehicleId => Distance: ${distance.toStringAsFixed(2)} m, Bearing: ${bearingToOther.toStringAsFixed(2)}°, My Heading: ${_currentHeading.toStringAsFixed(2)}°, Angle Difference: ${angleDifference.toStringAsFixed(2)}°");
-      if (angleDifference > _angleThreshold) {
-        print(
-            "Debug: Vehicle $vehicleId is not in front (angle difference > $_angleThreshold°).");
-        return;
+
+      // ------------------
+      // A) Slow vehicle ahead check
+      // ------------------
+      if (angleDifference < _angleThreshold) {
+        if (_currentSpeed > (vehicleData.speed + _speedDiffThreshold) &&
+            distance < _distanceThreshold) {
+          overtakingCandidate = true;
+          print(
+            "Debug: Slow vehicle ahead => ID=$vehicleId | distance=${distance.toStringAsFixed(2)} m",
+          );
+        }
       }
-      if (_currentSpeed > (vehicleData.speed + _speedDiffThreshold) &&
-          distance < _distanceThreshold) {
-        unsafe = true;
+
+      // ------------------
+      // B) Oncoming vehicle check
+      // ------------------
+      double expectedOncomingHeading = (_currentHeading + 180) % 360;
+      double headingDifference =
+          (vehicleData.heading - expectedOncomingHeading).abs();
+      if (headingDifference > 180) {
+        headingDifference = 360 - headingDifference;
+      }
+
+      if (headingDifference < _angleThreshold &&
+          distance < _distanceThresholdOncoming) {
+        oncomingDetected = true;
         print(
-            "Debug: Overtaking condition met for vehicle $vehicleId. My Speed: $_currentSpeed km/h, Other Speed: ${vehicleData.speed} km/h, Distance: ${distance.toStringAsFixed(2)} m");
-      } else {
-        print(
-            "Debug: Overtaking condition NOT met for vehicle $vehicleId. My Speed: $_currentSpeed km/h, Other Speed: ${vehicleData.speed} km/h, Distance: ${distance.toStringAsFixed(2)} m");
+          "Debug: Oncoming vehicle detected => ID=$vehicleId | distance=${distance.toStringAsFixed(2)} m",
+        );
       }
     });
 
+    // Combine the two checks
+    bool finalUnsafe = overtakingCandidate || oncomingDetected;
     if (mounted) {
       setState(() {
-        _overtakingUnsafe = unsafe;
+        _overtakingUnsafe = finalUnsafe;
       });
     }
     print("Debug: Overtaking unsafe flag is set to: $_overtakingUnsafe");
@@ -307,6 +342,9 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
         TextEditingController(text: _angleThreshold.toString());
     final TextEditingController minSpeedController =
         TextEditingController(text: _minimumSpeedForCheck.toString());
+    // Additional oncoming threshold controller
+    final TextEditingController oncomingDistanceController =
+        TextEditingController(text: _distanceThresholdOncoming.toString());
 
     await showDialog(
       context: context,
@@ -344,6 +382,13 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
                     labelText: "Minimum Speed for Check (km/h)",
                   ),
                 ),
+                TextField(
+                  controller: oncomingDistanceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: "Oncoming Vehicle Distance (m)",
+                  ),
+                ),
               ],
             ),
           ),
@@ -368,9 +413,16 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
                   _minimumSpeedForCheck =
                       double.tryParse(minSpeedController.text) ??
                           _minimumSpeedForCheck;
+                  _distanceThresholdOncoming =
+                      double.tryParse(oncomingDistanceController.text) ??
+                          _distanceThresholdOncoming;
                 });
-                print(
-                    "Debug: New settings => SpeedDiff: $_speedDiffThreshold km/h, Distance: $_distanceThreshold m, Angle: $_angleThreshold°, MinSpeed: $_minimumSpeedForCheck km/h");
+                print("Debug: New settings => "
+                    "SpeedDiff: $_speedDiffThreshold km/h, "
+                    "Distance: $_distanceThreshold m, "
+                    "Angle: $_angleThreshold°, "
+                    "MinSpeed: $_minimumSpeedForCheck km/h, "
+                    "OncomingDist: $_distanceThresholdOncoming m");
                 Navigator.of(context).pop();
                 // Optionally, re-check overtaking logic after settings change.
                 _checkOvertakingSafety();
@@ -393,7 +445,9 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
       _currentSpeed = 95.0; // Your vehicle's speed in km/h
       _currentHeading = 0.0; // Facing north
     });
-    // Simulate data for two vehicles: your vehicle (vehicle3) and another vehicle (vehicle4)
+    // Simulate data for two vehicles:
+    // 1. Your vehicle (vehicle3)
+    // 2. Another vehicle (vehicle4) directly ahead
     _allVehicles = {
       'vehicle3': VehicleData(
         position: LatLng(9.6059295, 76.4819432),
@@ -402,18 +456,27 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
         heading: 0.0,
       ),
       'vehicle4': VehicleData(
-        // Adjusted coordinates so vehicle4 is directly ahead.
+        // Slightly ahead
         position: LatLng(9.6059395, 76.4819432),
         speed: 75.0,
         timestamp: DateTime.now().millisecondsSinceEpoch,
         heading: 0.0,
       ),
+      'vehicleOncoming': VehicleData(
+        // Example oncoming traffic from the opposite direction
+        position: LatLng(9.6060, 76.48190),
+        speed: 80.0,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        heading: 180.0, // Opposite heading
+      ),
     };
     print("Debug: Test data simulated.");
     print(
-        "Debug: Vehicle3 (Your Vehicle) => Speed: 95 km/h, Position: $_currentPosition, Heading: $_currentHeading°");
+        "Debug: Vehicle3 => Speed: 95 km/h, Pos: $_currentPosition, Heading: $_currentHeading°");
     print(
-        "Debug: Vehicle4 (Other Vehicle) => Speed: 75 km/h, Position: LatLng(9.6059395, 76.4819432), Heading: 0°");
+        "Debug: Vehicle4 => Speed: 75 km/h, Pos: (9.6059395, 76.4819432), Heading: 0°");
+    print(
+        "Debug: OncomingVehicle => Speed: 80 km/h, Pos: (9.6060, 76.48190), Heading: 180°");
     _checkOvertakingSafety();
     setState(() {
       _isLoading = false;
@@ -496,6 +559,7 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
   List<Marker> _buildMarkers() {
     final vehicleKeys = _allVehicles.keys.toList();
     final markers = <Marker>[
+      // Build marker for your own vehicle
       _buildVehicleMarker(
         widget.vehicleId,
         _currentPosition,
@@ -504,6 +568,7 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
         true,
         0,
       ),
+      // Build markers for other vehicles
       ...vehicleKeys.where((key) => key != widget.vehicleId).map((key) {
         final vehicleData = _allVehicles[key]!;
         return _buildVehicleMarker(
@@ -527,6 +592,7 @@ class _VehicleTrackingScreenState extends State<VehicleTrackingScreen> {
     bool isCurrent,
     int index,
   ) {
+    // Slight offset for multiple markers, if needed
     final double offset = index * 0.0001;
     final offsetPosition = LatLng(
       position.latitude + offset,
