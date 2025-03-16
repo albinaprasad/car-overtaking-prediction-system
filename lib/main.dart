@@ -3,14 +3,16 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:camera/camera.dart';
 import 'home_screen.dart';
 import 'overspeed/overspeed_screen.dart';
-import 'pages/map_page.dart'; // This file contains VehicleTrackingScreen
+import 'pages/map_page.dart';
 import 'pages/3d_map_screen.dart';
+import 'admin_dashboard.dart';
+import 'admin_login.dart'; // Add this line
+// Import Admin Dashboard
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  // Load available cameras for overspeed detection.
   final cameras = await availableCameras();
 
   runApp(MyApp(cameras: cameras));
@@ -22,35 +24,26 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // A bright blue primary color. Adjust as needed.
-    const primaryBlue = Color(0xFF0E74E7);
-
     return MaterialApp(
       title: 'Vehicle Tracker',
       theme: ThemeData(
-        // Use a single primary color or build a MaterialColor swatch
-        primaryColor: primaryBlue,
-        // App-wide color scheme (Material 3 style).
+        primaryColor: Color(0xFF0E74E7),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: primaryBlue,
-          primary: primaryBlue,
+          seedColor: Color(0xFF0E74E7),
+          primary: Color(0xFF0E74E7),
         ),
         scaffoldBackgroundColor: Colors.white,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: primaryBlue,
-          foregroundColor: Colors.white, // Icon and text color
-          centerTitle: true,
-          elevation: 0,
-        ),
         useMaterial3: true,
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => HomeScreen(cameras: cameras),
+        '/': (context) => AdminLoginScreen(),
+        '/home': (context) => HomeScreen(cameras: cameras),
         '/overspeed': (context) => OverspeedLauncherScreen(cameras: cameras),
         '/overtaking': (context) =>
             VehicleTrackingScreen(vehicleId: 'vehicle2'),
-        '/map3d': (context) => const ThreeDMapScreen()
+        '/map3d': (context) => const ThreeDMapScreen(),
+        '/admin': (context) => AdminDashboard(), // Removed `const`
       },
     );
   }

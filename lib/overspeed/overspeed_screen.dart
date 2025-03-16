@@ -96,7 +96,8 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
       double speedKmh = position.speed * 3.6;
       setState(() {
         // For testing, you can set a fixed speed if needed:
-        _currentSpeedKmh = 70; //************************************************************************** */
+        _currentSpeedKmh =
+            70; //************************************************************************** */
         // Uncomment to use real speed:
         // _currentSpeedKmh = speedKmh;
       });
@@ -130,7 +131,7 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
       var request = http.MultipartRequest(
         'POST',
         Uri.parse(
-            'http://192.168.38.58:5000/detect'), // Update with your server URL.
+            'http://192.168.1.5:5000/detect'), // Update with your server URL.
       );
       request.files.add(await http.MultipartFile.fromPath('image', image.path));
       var response = await request.send();
