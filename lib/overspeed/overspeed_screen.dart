@@ -7,12 +7,21 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+// Firebase imports
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class OverspeedLauncherScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
+  final String userId; // User ID from authentication
+  final String vehicleNumber; // Vehicle registration number
 
-  const OverspeedLauncherScreen({Key? key, required this.cameras})
-      : super(key: key);
+  const OverspeedLauncherScreen({
+    Key? key,
+    required this.cameras,
+    required this.userId,
+    required this.vehicleNumber,
+  }) : super(key: key);
 
   @override
   State<OverspeedLauncherScreen> createState() =>
@@ -44,7 +53,7 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
   // Holds the status of audio playback for display in the UI.
   String _audioStatus = '';
 
-  // Alert voice selection
+  // Alert voice selection.
   final List<String> _alertVoices = [
     'voice1.mp3',
     'voice2.mp3',
@@ -52,12 +61,30 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
   ];
   String _selectedVoice = 'voice1.mp3'; // default voice
 
+  // Firebase database reference.
+  late DatabaseReference _overspeedRef;
+
+  // Overspeed tracking variables.
+  bool _isCurrentlyOverspeeding = false;
+  DateTime? _overspeedStartTime;
+  double _maxSpeedReached = 0.0;
+  String? _currentOverspeedId;
+
   @override
   void initState() {
     super.initState();
     _initializeCamera();
     _initializeLocationListener();
     _loadSelectedVoice();
+    _initializeFirebase();
+  }
+
+  // Initialize Firebase and create a database reference using the userId.
+  void _initializeFirebase() {
+    _overspeedRef = FirebaseDatabase.instance
+        .ref()
+        .child('overspeed_events')
+        .child(widget.userId);
   }
 
   Future<void> _initializeCamera() async {
@@ -98,9 +125,12 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
         // For testing, you can set a fixed speed if needed:
         _currentSpeedKmh =
             70; //************************************************************************** */
-        // Uncomment to use real speed:
+        // Uncomment the following line to use real speed:
         // _currentSpeedKmh = speedKmh;
       });
+
+      // Check if overspeeding and track the event.
+      _checkAndTrackOverspeeding();
 
       // If we have a stored sign location, calculate the distance.
       if (_activeSpeedLimit != null && _lastSignPosition != null) {
@@ -121,6 +151,81 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
     });
   }
 
+  // Check if user is overspeeding and track the event.
+  void _checkAndTrackOverspeeding() {
+    if (_currentSpeedKmh != null &&
+        _activeSpeedLimit != null &&
+        _currentPosition != null) {
+      bool isOverspeed = _currentSpeedKmh! > _activeSpeedLimit!;
+
+      if (isOverspeed && !_isCurrentlyOverspeeding) {
+        _startOverspeedTracking();
+      } else if (isOverspeed && _isCurrentlyOverspeeding) {
+        _updateOverspeedTracking();
+      } else if (!isOverspeed && _isCurrentlyOverspeeding) {
+        _endOverspeedTracking();
+      }
+    }
+  }
+
+  // Start tracking a new overspeed event.
+  void _startOverspeedTracking() {
+    _isCurrentlyOverspeeding = true;
+    _overspeedStartTime = DateTime.now();
+    _maxSpeedReached = _currentSpeedKmh!;
+
+    // Create a new entry in Firebase with initial data.
+    _currentOverspeedId = _overspeedRef.push().key;
+
+    if (_currentOverspeedId != null) {
+      _overspeedRef.child(_currentOverspeedId!).set({
+        'startTimestamp': _overspeedStartTime!.millisecondsSinceEpoch,
+        'vehicleNumber': widget.vehicleNumber,
+        'startSpeed': _currentSpeedKmh,
+        'speedLimit': _activeSpeedLimit,
+        'startLatitude': _currentPosition!.latitude,
+        'startLongitude': _currentPosition!.longitude,
+        'maxSpeed': _currentSpeedKmh,
+        'status': 'ongoing'
+      });
+    }
+  }
+
+  // Update the ongoing overspeed event.
+  void _updateOverspeedTracking() {
+    if (_currentSpeedKmh! > _maxSpeedReached) {
+      _maxSpeedReached = _currentSpeedKmh!;
+      if (_currentOverspeedId != null) {
+        _overspeedRef
+            .child(_currentOverspeedId!)
+            .update({'maxSpeed': _maxSpeedReached});
+      }
+    }
+  }
+
+  // End the overspeed tracking and update final details.
+  void _endOverspeedTracking() {
+    if (_overspeedStartTime != null && _currentOverspeedId != null) {
+      DateTime endTime = DateTime.now();
+      Duration duration = endTime.difference(_overspeedStartTime!);
+
+      _overspeedRef.child(_currentOverspeedId!).update({
+        'endTimestamp': endTime.millisecondsSinceEpoch,
+        'durationSeconds': duration.inSeconds,
+        'endLatitude': _currentPosition!.latitude,
+        'endLongitude': _currentPosition!.longitude,
+        'maxSpeed': _maxSpeedReached,
+        'status': 'completed'
+      });
+
+      // Reset tracking variables.
+      _isCurrentlyOverspeeding = false;
+      _overspeedStartTime = null;
+      _currentOverspeedId = null;
+      _maxSpeedReached = 0.0;
+    }
+  }
+
   // Capture a frame, send it to the detection server, and process the response.
   Future<void> _processFrame() async {
     if (!_controller.value.isInitialized) return;
@@ -131,7 +236,7 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
       var request = http.MultipartRequest(
         'POST',
         Uri.parse(
-            'http://192.168.1.5:5000/detect'), // Update with your server URL.
+            'http://192.168.1.4:5000/detect'), // Update with your server URL.
       );
       request.files.add(await http.MultipartFile.fromPath('image', image.path));
       var response = await request.send();
@@ -148,7 +253,7 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
       }
       await File(image.path).delete();
     } catch (e) {
-      // Optionally handle error
+      // Optionally handle error.
     } finally {
       setState(() => _isProcessing = false);
     }
@@ -167,7 +272,6 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
           if (detectedSpeed != null) {
             setState(() {
               _activeSpeedLimit = detectedSpeed;
-              // Save current location if available.
               if (_currentPosition != null) {
                 _lastSignPosition = _currentPosition;
               }
@@ -311,6 +415,12 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
                     _audioStatus,
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                     textAlign: TextAlign.center,
+                  ),
+                  // Display vehicle number.
+                  const SizedBox(height: 8),
+                  Text(
+                    'Vehicle: ${widget.vehicleNumber}',
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ],
               ),

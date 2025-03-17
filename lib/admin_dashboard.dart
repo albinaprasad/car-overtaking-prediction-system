@@ -13,13 +13,14 @@ class _AdminDashboardState extends State<AdminDashboard>
   final _refreshIndicatorKeys = [
     GlobalKey<RefreshIndicatorState>(),
     GlobalKey<RefreshIndicatorState>(),
-    GlobalKey<RefreshIndicatorState>()
+    GlobalKey<RefreshIndicatorState>(),
+    GlobalKey<RefreshIndicatorState>(), // Added for Users tab.
   ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this); // Updated length.
   }
 
   @override
@@ -39,6 +40,7 @@ class _AdminDashboardState extends State<AdminDashboard>
             Tab(text: "Vehicles", icon: Icon(Icons.directions_car)),
             Tab(text: "Incidents", icon: Icon(Icons.report_problem)),
             Tab(text: "Special Node", icon: Icon(Icons.data_object)),
+            Tab(text: "Users", icon: Icon(Icons.person)), // New Users tab.
           ],
         ),
       ),
@@ -48,6 +50,7 @@ class _AdminDashboardState extends State<AdminDashboard>
           _buildRefreshableTab(0, VehiclesTab()),
           _buildRefreshableTab(1, IncidentReportsTab()),
           _buildRefreshableTab(2, SpecialNodeTab()),
+          _buildRefreshableTab(3, UsersTab()), // New Users tab content.
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -162,7 +165,31 @@ class SpecialNodeTab extends StatelessWidget {
   }
 }
 
-// List Widgets
+class UsersTab extends StatelessWidget {
+  final usersRef = FirebaseDatabase.instance.ref("users");
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DatabaseEvent>(
+      stream: usersRef.onValue.handleError((error) {
+        _showErrorSnackbar(context, "Users: $error");
+      }),
+      builder: (context, snapshot) {
+        if (snapshot.hasError)
+          return _ErrorWidget(message: "Failed to load users");
+        if (snapshot.connectionState == ConnectionState.waiting)
+          return _LoadingList(items: 5);
+
+        final users = _parseSnapshotData(snapshot.data?.snapshot);
+        return users.isNotEmpty
+            ? _UserList(users: users)
+            : _EmptyState(message: "No users found");
+      },
+    );
+  }
+}
+
+// List Widgets for Vehicles
 class _VehicleList extends StatelessWidget {
   final Map<dynamic, dynamic> vehicles;
 
@@ -200,6 +227,7 @@ class _VehicleListItem extends StatelessWidget {
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
         title: Text("Vehicle $vehicleId",
             style: TextStyle(fontWeight: FontWeight.w500)),
@@ -220,6 +248,7 @@ class _VehicleListItem extends StatelessWidget {
   }
 }
 
+// List Widgets for Incidents
 class _IncidentList extends StatelessWidget {
   final Map<dynamic, dynamic> incidents;
 
@@ -257,6 +286,7 @@ class _IncidentListItem extends StatelessWidget {
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       color: Colors.amber[50],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
         leading: Icon(Icons.warning, color: Colors.orange),
         title: Text("Incident $incidentId"),
@@ -267,12 +297,14 @@ class _IncidentListItem extends StatelessWidget {
             Text("Reported: ${_formatTimestamp(data['timestamp'])}"),
           ],
         ),
+        trailing: Icon(Icons.chevron_right),
         onTap: () => showDetailDialog(context, incidentId, data, "Incident"),
       ),
     );
   }
 }
 
+// List Widgets for Special Node Data
 class _NodeDataList extends StatelessWidget {
   final Map<dynamic, dynamic> nodeData;
 
@@ -309,10 +341,12 @@ class _NodeDataListItem extends StatelessWidget {
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       color: Colors.blue[50],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
         leading: Icon(Icons.data_object, color: Colors.blue),
         title: Text(label),
         subtitle: _buildValuePreview(value),
+        trailing: Icon(Icons.chevron_right),
         onTap: () =>
             showDetailDialog(context, label, {'value': value}, "Node Data"),
       ),
@@ -324,6 +358,63 @@ class _NodeDataListItem extends StatelessWidget {
       return Text("${value.length} items", style: TextStyle(fontSize: 12));
     }
     return Text(value.toString(), style: TextStyle(fontSize: 12));
+  }
+}
+
+// List Widgets for Users
+class _UserList extends StatelessWidget {
+  final Map<dynamic, dynamic> users;
+
+  const _UserList({required this.users});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: users.length,
+      itemBuilder: (context, index) {
+        final entry = users.entries.elementAt(index);
+        final userData = _ensureMap(entry.value);
+        return _UserListItem(
+          key: ValueKey(entry.key),
+          userId: entry.key.toString(),
+          data: userData,
+        );
+      },
+    );
+  }
+}
+
+class _UserListItem extends StatelessWidget {
+  final String userId;
+  final Map<dynamic, dynamic> data;
+
+  const _UserListItem({
+    required Key key,
+    required this.userId,
+    required this.data,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: ListTile(
+        leading: Icon(Icons.person, color: Colors.blue),
+        title: Text(data['fullName'] ?? "User $userId"),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Email: ${data['email'] ?? 'N/A'}"),
+            Text("Contact: ${data['contactNumber'] ?? 'N/A'}"),
+            Text("Vehicle: ${data['vehicleRegNumber'] ?? 'N/A'}"),
+          ],
+        ),
+        trailing: Icon(Icons.chevron_right),
+        onTap: () => showDetailDialog(context, userId, data, "User"),
+      ),
+    );
   }
 }
 
@@ -387,9 +478,8 @@ class _ErrorWidget extends StatelessWidget {
           Text(message, style: TextStyle(color: Colors.red)),
           SizedBox(height: 8),
           TextButton(
-            // Removed setState since _ErrorWidget is stateless.
             onPressed: () {
-              // You can implement a proper retry callback here if needed.
+              // Implement a proper retry callback if needed.
             },
             child: Text("Retry"),
           ),
@@ -410,9 +500,12 @@ class _LocationChip extends StatelessWidget {
     return Chip(
       backgroundColor: Colors.blue[50],
       label: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Lat: ${_formatCoordinate(lat)}"),
-          Text("Lon: ${_formatCoordinate(lon)}"),
+          Text("Lat: ${_formatCoordinate(lat)}",
+              style: TextStyle(fontSize: 12)),
+          Text("Lon: ${_formatCoordinate(lon)}",
+              style: TextStyle(fontSize: 12)),
         ],
       ),
     );

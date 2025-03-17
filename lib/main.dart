@@ -6,15 +6,13 @@ import 'overspeed/overspeed_screen.dart';
 import 'pages/map_page.dart';
 import 'pages/3d_map_screen.dart';
 import 'admin_dashboard.dart';
-import 'admin_login.dart'; // Add this line
-// Import Admin Dashboard
+import 'integrated_auth_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
   final cameras = await availableCameras();
-
   runApp(MyApp(cameras: cameras));
 }
 
@@ -27,23 +25,36 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Vehicle Tracker',
       theme: ThemeData(
-        primaryColor: Color(0xFF0E74E7),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Color(0xFF0E74E7),
-          primary: Color(0xFF0E74E7),
+          seedColor: const Color(0xFF0E74E7),
+          primary: const Color(0xFF0E74E7),
         ),
         scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
       ),
-      initialRoute: '/',
+      debugShowCheckedModeBanner: false,
+      initialRoute: '/auth',
       routes: {
-        '/': (context) => AdminLoginScreen(),
+        '/auth': (context) => const IntegratedAuthScreen(),
         '/home': (context) => HomeScreen(cameras: cameras),
-        '/overspeed': (context) => OverspeedLauncherScreen(cameras: cameras),
+        // For overspeed, we pass the arguments using onGenerateRoute.
         '/overtaking': (context) =>
             VehicleTrackingScreen(vehicleId: 'vehicle2'),
         '/map3d': (context) => const ThreeDMapScreen(),
-        '/admin': (context) => AdminDashboard(), // Removed `const`
+        '/admin': (context) => AdminDashboard(),
+      },
+      onGenerateRoute: (settings) {
+        if (settings.name == '/overspeed') {
+          final args = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (context) => OverspeedLauncherScreen(
+              cameras: args['cameras'],
+              userId: args['userId'],
+              vehicleNumber: args['vehicleNumber'],
+            ),
+          );
+        }
+        return null;
       },
     );
   }

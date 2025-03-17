@@ -1,17 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Import overspeed_screen if you need references here
 import 'overspeed/overspeed_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
   const HomeScreen({Key? key, required this.cameras}) : super(key: key);
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String? userId;
+  String? vehicleNumber;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  // Retrieve stored user data (userId and vehicleNumber) from SharedPreferences.
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      userId = prefs.getString("userId");
+      vehicleNumber = prefs.getString("vehicleNumber");
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // While loading, show a loading indicator.
+    if (userId == null || vehicleNumber == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     return Scaffold(
-      // We’ll add a Drawer to mimic the second screenshot (blue menu).
+      // We'll add a Drawer to mimic the blue menu.
       drawer: const _CustomDrawer(),
       appBar: AppBar(
         title: const Text("--AEGIS--"),
@@ -19,11 +49,15 @@ class HomeScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Top header area: You can display an image or just hero text
+            // Top header area: You can display an image or hero text.
             _HeaderSection(),
-            // Grid of features (Overspeed, Overtaking, and now 3D Map)
-            _FeatureGrid(),
-            // “Popular Services” section
+            // Grid of features (Overspeed, Overtaking, and 3D Map).
+            _FeatureGrid(
+              cameras: widget.cameras,
+              userId: userId!,
+              vehicleNumber: vehicleNumber!,
+            ),
+            // "Popular Services" section.
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: Align(
@@ -50,11 +84,11 @@ class _HeaderSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // Adjust height as needed
+      // Adjust height as needed.
       height: 200,
       width: double.infinity,
       decoration: const BoxDecoration(
-        // Could be a gradient or an image
+        // Could be a gradient or an image.
         gradient: LinearGradient(
           colors: [
             Color.fromARGB(255, 14, 126, 231),
@@ -97,6 +131,16 @@ class _HeaderSection extends StatelessWidget {
 
 /// A grid with feature cards for main functionalities.
 class _FeatureGrid extends StatelessWidget {
+  final List<CameraDescription> cameras;
+  final String userId;
+  final String vehicleNumber;
+  const _FeatureGrid({
+    Key? key,
+    required this.cameras,
+    required this.userId,
+    required this.vehicleNumber,
+  }) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     final features = [
@@ -111,7 +155,7 @@ class _FeatureGrid extends StatelessWidget {
         routeName: "/overtaking",
       ),
       _FeatureItem(
-        icon: Icons.threed_rotation, // Icon representing 3D functionality
+        icon: Icons.threed_rotation, // Icon representing 3D functionality.
         label: "Map",
         routeName: "/map3d",
       ),
@@ -120,27 +164,31 @@ class _FeatureGrid extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: GridView.builder(
-        // By default, GridView wants to take infinite height,
-        // so wrap it in a SizedBox or use shrinkWrap + physics.
+        // Use shrinkWrap and disable scrolling for GridView.
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: features.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3, // Display 3 features per row
+          crossAxisCount: 3, // Display 3 features per row.
           childAspectRatio: 0.8,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
         ),
         itemBuilder: (context, index) {
           final item = features[index];
-          return _FeatureCard(item: item);
+          return _FeatureCard(
+            item: item,
+            cameras: cameras,
+            userId: userId,
+            vehicleNumber: vehicleNumber,
+          );
         },
       ),
     );
   }
 }
 
-/// Model for each feature
+/// Model for each feature.
 class _FeatureItem {
   final IconData icon;
   final String label;
@@ -156,16 +204,36 @@ class _FeatureItem {
 /// Card widget for a single feature in the grid.
 class _FeatureCard extends StatelessWidget {
   final _FeatureItem item;
-  const _FeatureCard({Key? key, required this.item}) : super(key: key);
+  final List<CameraDescription> cameras;
+  final String userId;
+  final String vehicleNumber;
+  const _FeatureCard({
+    Key? key,
+    required this.item,
+    required this.cameras,
+    required this.userId,
+    required this.vehicleNumber,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => Navigator.pushNamed(context, item.routeName),
+      onTap: () {
+        // If the feature is Overspeed Detection, pass the required arguments.
+        if (item.routeName == '/overspeed') {
+          Navigator.pushNamed(context, item.routeName, arguments: {
+            'cameras': cameras,
+            'userId': userId,
+            'vehicleNumber': vehicleNumber,
+          });
+        } else {
+          Navigator.pushNamed(context, item.routeName);
+        }
+      },
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Icon inside a circular container
+          // Icon inside a circular container.
           Container(
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
@@ -247,7 +315,7 @@ class _ServiceCard extends StatelessWidget {
   }
 }
 
-/// Custom Drawer to mimic the second screenshot (blue menu with icons).
+/// Custom Drawer to mimic the blue menu with icons.
 class _CustomDrawer extends StatelessWidget {
   const _CustomDrawer();
 
@@ -255,11 +323,11 @@ class _CustomDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       child: Container(
-        color: const Color(0xFF0E74E7), // Blue background
+        color: const Color(0xFF0E74E7), // Blue background.
         child: SafeArea(
           child: Column(
             children: [
-              // Drawer Header
+              // Drawer Header.
               Container(
                 height: 150,
                 width: double.infinity,
@@ -275,12 +343,12 @@ class _CustomDrawer extends StatelessWidget {
                   ),
                 ),
               ),
-              // Drawer Items
+              // Drawer Items.
               _DrawerItem(
                 icon: Icons.home,
                 label: "Home",
                 onTap: () {
-                  Navigator.pop(context); // Close drawer
+                  Navigator.pop(context); // Close drawer.
                   Navigator.pushNamed(context, '/');
                 },
               ),
@@ -288,44 +356,44 @@ class _CustomDrawer extends StatelessWidget {
                 icon: Icons.info,
                 label: "About",
                 onTap: () {
-                  // Implement About route or logic
+                  // Implement About route or logic.
                 },
               ),
               _DrawerItem(
                 icon: Icons.settings,
                 label: "Settings",
                 onTap: () {
-                  // Implement Settings route or logic
+                  // Implement Settings route or logic.
                 },
               ),
               _DrawerItem(
                 icon: Icons.monetization_on,
                 label: "Earnings",
                 onTap: () {
-                  // Implement Earnings route or logic
+                  // Implement Earnings route or logic.
                 },
               ),
               _DrawerItem(
                 icon: Icons.account_circle,
                 label: "Profile",
                 onTap: () {
-                  // Implement Profile logic
+                  // Implement Profile logic.
                 },
               ),
               _DrawerItem(
                 icon: Icons.contact_mail,
                 label: "Contact",
                 onTap: () {
-                  // Implement Contact route or logic
+                  // Implement Contact route or logic.
                 },
               ),
               const Spacer(),
-              // Logout at the bottom
+              // Logout at the bottom.
               _DrawerItem(
                 icon: Icons.logout,
                 label: "Logout",
                 onTap: () {
-                  // Implement logout logic
+                  // Implement logout logic.
                 },
               ),
             ],
