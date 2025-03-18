@@ -353,7 +353,7 @@ class _OwnerAuthWidgetState extends State<OwnerAuthWidget> {
                 children: [
                   const SizedBox(height: 50),
                   Text(
-                    isLogin ? "Owner Login" : "Create Owner Account",
+                    isLogin ? "Vehicle Owner Login" : "Create Owner Account",
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,

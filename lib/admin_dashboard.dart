@@ -13,14 +13,14 @@ class _AdminDashboardState extends State<AdminDashboard>
   final _refreshIndicatorKeys = [
     GlobalKey<RefreshIndicatorState>(),
     GlobalKey<RefreshIndicatorState>(),
+    GlobalKey<RefreshIndicatorState>(), // For Overspeed Events tab.
     GlobalKey<RefreshIndicatorState>(),
-    GlobalKey<RefreshIndicatorState>(), // Added for Users tab.
   ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this); // Updated length.
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -39,8 +39,8 @@ class _AdminDashboardState extends State<AdminDashboard>
           tabs: [
             Tab(text: "Vehicles", icon: Icon(Icons.directions_car)),
             Tab(text: "Incidents", icon: Icon(Icons.report_problem)),
-            Tab(text: "Special Node", icon: Icon(Icons.data_object)),
-            Tab(text: "Users", icon: Icon(Icons.person)), // New Users tab.
+            Tab(text: "Overspeed Events", icon: Icon(Icons.speed)),
+            Tab(text: "Users", icon: Icon(Icons.person)),
           ],
         ),
       ),
@@ -49,8 +49,8 @@ class _AdminDashboardState extends State<AdminDashboard>
         children: [
           _buildRefreshableTab(0, VehiclesTab()),
           _buildRefreshableTab(1, IncidentReportsTab()),
-          _buildRefreshableTab(2, SpecialNodeTab()),
-          _buildRefreshableTab(3, UsersTab()), // New Users tab content.
+          _buildRefreshableTab(2, OverspeedEventsTab()),
+          _buildRefreshableTab(3, UsersTab()),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -93,6 +93,7 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 }
 
+// Vehicles Tab
 class VehiclesTab extends StatelessWidget {
   final vehiclesRef = FirebaseDatabase.instance.ref("vehicles");
 
@@ -117,6 +118,7 @@ class VehiclesTab extends StatelessWidget {
   }
 }
 
+// Incident Reports Tab
 class IncidentReportsTab extends StatelessWidget {
   final incidentsRef = FirebaseDatabase.instance.ref("incident_reports");
 
@@ -141,30 +143,32 @@ class IncidentReportsTab extends StatelessWidget {
   }
 }
 
-class SpecialNodeTab extends StatelessWidget {
-  final specialNodeRef = FirebaseDatabase.instance.ref("-OLSUx1L6keI5Jiu0M_j");
+// Overspeed Events Tab
+class OverspeedEventsTab extends StatelessWidget {
+  final overspeedRef = FirebaseDatabase.instance.ref("overspeed_events");
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DatabaseEvent>(
-      stream: specialNodeRef.onValue.handleError((error) {
-        _showErrorSnackbar(context, "Special Node: $error");
+      stream: overspeedRef.onValue.handleError((error) {
+        _showErrorSnackbar(context, "Overspeed Events: $error");
       }),
       builder: (context, snapshot) {
         if (snapshot.hasError)
-          return _ErrorWidget(message: "Failed to load node data");
+          return _ErrorWidget(message: "Failed to load overspeed events");
         if (snapshot.connectionState == ConnectionState.waiting)
           return _LoadingList(items: 4);
 
-        final nodeData = _parseSnapshotData(snapshot.data?.snapshot);
-        return nodeData.isNotEmpty
-            ? _NodeDataList(nodeData: nodeData)
-            : _EmptyState(message: "No data available");
+        final events = _parseSnapshotData(snapshot.data?.snapshot);
+        return events.isNotEmpty
+            ? _OverspeedEventList(events: events)
+            : _EmptyState(message: "No overspeed events found");
       },
     );
   }
 }
 
+// Users Tab
 class UsersTab extends StatelessWidget {
   final usersRef = FirebaseDatabase.instance.ref("users");
 
@@ -304,60 +308,68 @@ class _IncidentListItem extends StatelessWidget {
   }
 }
 
-// List Widgets for Special Node Data
-class _NodeDataList extends StatelessWidget {
-  final Map<dynamic, dynamic> nodeData;
+// List Widgets for Overspeed Events (updated to mimic vehicle display)
+class _OverspeedEventList extends StatelessWidget {
+  final Map<dynamic, dynamic> events;
 
-  const _NodeDataList({required this.nodeData});
+  const _OverspeedEventList({required this.events});
 
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      itemCount: nodeData.length,
+      itemCount: events.length,
       itemBuilder: (context, index) {
-        final entry = nodeData.entries.elementAt(index);
-        return _NodeDataListItem(
+        final entry = events.entries.elementAt(index);
+        final eventData = _ensureMap(entry.value);
+        return _OverspeedEventListItem(
           key: ValueKey(entry.key),
-          label: entry.key.toString(),
-          value: entry.value,
+          eventId: entry.key.toString(),
+          data: eventData,
         );
       },
     );
   }
 }
 
-class _NodeDataListItem extends StatelessWidget {
-  final String label;
-  final dynamic value;
+class _OverspeedEventListItem extends StatelessWidget {
+  final String eventId;
+  final Map<dynamic, dynamic> data;
 
-  const _NodeDataListItem({
+  const _OverspeedEventListItem({
     required Key key,
-    required this.label,
-    required this.value,
+    required this.eventId,
+    required this.data,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Similar design to the vehicle display
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      color: Colors.blue[50],
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
-        leading: Icon(Icons.data_object, color: Colors.blue),
-        title: Text(label),
-        subtitle: _buildValuePreview(value),
-        trailing: Icon(Icons.chevron_right),
+        title: Text(
+          "Vehicle ${data['vehicleNumber'] ?? 'Unknown'}",
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Status: ${data['status'] ?? 'N/A'}"),
+            Text("Max Speed: ${_formatSpeed(data['maxSpeed'])}"),
+            Text("Speed Limit: ${_formatSpeed(data['speedLimit'])}"),
+            Text("Started: ${_formatTimestamp(data['startTimestamp'])}"),
+          ],
+        ),
+        trailing: _LocationChip(
+          lat: data['startLatitude'],
+          lon: data['startLongitude'],
+        ),
         onTap: () =>
-            showDetailDialog(context, label, {'value': value}, "Node Data"),
+            showDetailDialog(context, eventId, data, "Overspeed Event"),
       ),
     );
-  }
-
-  Widget _buildValuePreview(dynamic value) {
-    if (value is Map) {
-      return Text("${value.length} items", style: TextStyle(fontSize: 12));
-    }
-    return Text(value.toString(), style: TextStyle(fontSize: 12));
   }
 }
 
@@ -586,8 +598,19 @@ Widget _buildDetailRow(dynamic key, dynamic value) {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("${key}: ", style: TextStyle(fontWeight: FontWeight.bold)),
-        Expanded(child: buildValueDisplay(value)),
+        Flexible(
+          flex: 1,
+          child: Text(
+            "$key: ",
+            style: TextStyle(fontWeight: FontWeight.bold),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        SizedBox(width: 8),
+        Flexible(
+          flex: 2,
+          child: buildValueDisplay(value),
+        ),
       ],
     ),
   );
@@ -619,8 +642,22 @@ Widget _buildSubItem(dynamic key, dynamic value) {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("  $key: ", style: TextStyle(fontStyle: FontStyle.italic)),
-        Expanded(child: Text(value.toString())),
+        Flexible(
+          flex: 1,
+          child: Text(
+            "  $key: ",
+            style: TextStyle(fontStyle: FontStyle.italic),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        SizedBox(width: 8),
+        Flexible(
+          flex: 2,
+          child: Text(
+            value.toString(),
+            softWrap: true,
+          ),
+        ),
       ],
     ),
   );

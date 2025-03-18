@@ -236,7 +236,7 @@ class _OverspeedLauncherScreenState extends State<OverspeedLauncherScreen> {
       var request = http.MultipartRequest(
         'POST',
         Uri.parse(
-            'http://192.168.1.4:5000/detect'), // Update with your server URL.
+            'http://192.168.237.58:5000/detect'), // Update with your server URL.
       );
       request.files.add(await http.MultipartFile.fromPath('image', image.path));
       var response = await request.send();
