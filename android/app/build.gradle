@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace "com.example.overtaking_assistant"
-    compileSdkVersion 34  // Replace with your Flutter compileSdk version
+    compileSdkVersion 35  // Replace with your Flutter compileSdk version
     ndkVersion "25.2.9519653" // Replace with your NDK version
 
     defaultConfig {

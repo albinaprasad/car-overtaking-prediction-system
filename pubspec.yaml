@@ -47,6 +47,7 @@ dependencies:
   sensors_plus: ^6.0.1
   cloud_firestore: ^4.8.2
   flutter_polyline_points: ^2.0.0
+  firebase_storage: ^11.0.16
  # Correct Firebase Realtime Database version
   # For real-time database
   firebase_auth: ^4.11.1   # If you need authentication
@@ -54,6 +55,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   intl: ^0.18.1
+  image_picker: ^1.1.1 
 
 dev_dependencies:
   flutter_test:
@@ -77,6 +79,7 @@ flutter:
     - assets/audio/voice2.mp3
     - assets/audio/voice3.mp3
     - assets/audio/alert.mp3
+    - assets/default_avatar.jpg
 
 
   # To add assets to your application, add an assets section, like this:

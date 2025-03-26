@@ -377,7 +377,8 @@ class _CustomDrawer extends StatelessWidget {
                 icon: Icons.account_circle,
                 label: "Profile",
                 onTap: () {
-                  // Implement Profile logic.
+                  Navigator.pushNamed(
+                      context, '/profile'); // Implement Profile logic.
                 },
               ),
               _DrawerItem(

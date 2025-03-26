@@ -7,6 +7,7 @@ import 'pages/map_page.dart';
 import 'pages/3d_map_screen.dart';
 import 'admin_dashboard.dart';
 import 'integrated_auth_screen.dart';
+import 'user_profile.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +42,7 @@ class MyApp extends StatelessWidget {
         '/overtaking': (context) =>
             VehicleTrackingScreen(vehicleId: 'vehicle2'),
         '/map3d': (context) => const ThreeDMapScreen(),
+        '/profile': (context) => const UserProfileScreen(),
         '/admin': (context) => AdminDashboard(),
       },
       onGenerateRoute: (settings) {
